@@ -51,13 +51,83 @@ def python_1_func():
     else:
         print("Failed to retrieve data from the Hacker News API.")
 
+@aql.dataframe(task_id="python_2")
+def python_2_func():
+    import requests
+    import pandas as pd
+    
+    # Set the API endpoint URL for retrieving top story IDs
+    top_stories_url = "https://hacker-news.firebaseio.com/v0/topstories.json"
+    
+    # Send a GET request to retrieve the top story IDs
+    response = requests.get(top_stories_url)
+    
+    # Check if the request was successful
+    if response.status_code == 200:
+        # Parse the JSON response
+        top_story_ids = response.json()
+    
+        # Retrieve the details of the top 10 stories
+        stories = []
+        for story_id in top_story_ids[:10]:
+            story_url = f"https://hacker-news.firebaseio.com/v0/item/{story_id}.json"
+            story_response = requests.get(story_url)
+    
+            if story_response.status_code == 200:
+                story_data = story_response.json()
+                story = {
+                    "ID": story_id,
+                    "Title": story_data.get("title", ""),
+                    "Author": story_data.get("by", ""),
+                    "Score": story_data.get("score", 0),
+                    "URL": story_data.get("url", ""),
+                    "Comments": story_data.get("descendants", 0),
+                    "Type": story_data.get("type", ""),
+                    "Time": pd.to_datetime(story_data.get("time", 0), unit="s"),
+                    "Text": story_data.get("text", ""),
+                    "Parent": story_data.get("parent", 0),
+                    "Poll": story_data.get("poll", 0),
+                    "Parts": story_data.get("parts", []),
+                    "Kids": story_data.get("kids", [])
+                }
+                stories.append(story)
+    
+        # Create a DataFrame from the retrieved stories
+        df = pd.DataFrame(stories)
+    
+    else:
+        print("Failed to retrieve data from the Hacker News API.")
+
+@aql.dataframe(task_id="python_3")
+def python_3_func():
+    # Convert the 'Time' column to a readable format
+    df['Time'] = df['Time'].dt.strftime('%Y-%m-%d %H:%M:%S')
+    
+    # Create a new column 'Domain' by extracting the domain from the 'URL' column
+    df['Domain'] = df['URL'].apply(lambda x: pd.DataFrame([x]).applymap(lambda x: x.split('/')[2] if pd.notnull(x) else '').iloc[0])
+    
+    # Create a new column 'NumParts' with the number of parts in each story
+    df['NumParts'] = df['Parts'].apply(len)
+    
+    # Create a new column 'NumKids' with the number of comments for each story
+    df['NumKids'] = df['Kids'].apply(len)
+    
+    # Sort the DataFrame by the 'Score' column in descending order
+    df = df.sort_values('Score', ascending=False)
+    
+    # Reset the index of the sorted DataFrame
+    df = df.reset_index(drop=True)
+    
+    # Print the updated DataFrame
+    print(df)
+
 default_args={
     "owner": "dolece9181@adstam.com,Open in Cloud IDE",
 }
 
 @dag(
     default_args=default_args,
-    schedule="0 0 * * *",
+    schedule="* * * * *",
     start_date=pendulum.from_format("2024-04-05", "YYYY-MM-DD").in_tz("UTC"),
     catchup=False,
     owner_links={
@@ -67,5 +137,9 @@ default_args={
 )
 def Testing_hackerrank():
     python_1 = python_1_func()
+
+    python_2 = python_2_func()
+
+    python_3 = python_3_func()
 
 dag_obj = Testing_hackerrank()
